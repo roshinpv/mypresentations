@@ -68,7 +68,7 @@ function App() {
 
   return (
     <div className="min-h-screen bg-gray-100 flex flex-col">
-      <header className="bg-white border-b">
+      <header className="bg-white border-b sticky top-0 z-10">
         <div className="max-w-5xl mx-auto py-4">
           <h1 className="text-2xl font-bold text-gray-900">AI Assistant</h1>
         </div>
