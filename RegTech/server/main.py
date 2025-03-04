@@ -7,9 +7,7 @@ from typing import List, Optional
 
 from .database import engine, SessionLocal, Base
 from .models import models
-from .schemas import schemas
-from .routers import regulations, agencies, banks, alerts, updates, graph, assistant, auth
-from .dependencies import get_current_user
+from .seed import seed_database
 
 # Configure logging
 logging.basicConfig(
@@ -20,6 +18,9 @@ logger = logging.getLogger(__name__)
 
 # Create database tables
 models.Base.metadata.create_all(bind=engine)
+
+# Seed the database
+seed_database()
 
 app = FastAPI(
     title="Regulatory Compliance API",
@@ -40,51 +41,6 @@ app.add_middleware(
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
-)
-
-# Include routers
-app.include_router(auth.router, prefix="/api/auth", tags=["Authentication"])
-app.include_router(
-    regulations.router, 
-    prefix="/api/regulations", 
-    tags=["Regulations"],
-    dependencies=[Depends(get_current_user)]
-)
-app.include_router(
-    agencies.router, 
-    prefix="/api/agencies", 
-    tags=["Agencies"],
-    dependencies=[Depends(get_current_user)]
-)
-app.include_router(
-    banks.router, 
-    prefix="/api/banks", 
-    tags=["Banks"],
-    dependencies=[Depends(get_current_user)]
-)
-app.include_router(
-    alerts.router, 
-    prefix="/api/alerts", 
-    tags=["Compliance Alerts"],
-    dependencies=[Depends(get_current_user)]
-)
-app.include_router(
-    updates.router, 
-    prefix="/api/updates", 
-    tags=["Regulatory Updates"],
-    dependencies=[Depends(get_current_user)]
-)
-app.include_router(
-    graph.router, 
-    prefix="/api/graph", 
-    tags=["Knowledge Graph"],
-    dependencies=[Depends(get_current_user)]
-)
-app.include_router(
-    assistant.router, 
-    prefix="/api/assistant", 
-    tags=["AI Assistant"],
-    dependencies=[Depends(get_current_user)]
 )
 
 @app.get("/", tags=["Root"])
