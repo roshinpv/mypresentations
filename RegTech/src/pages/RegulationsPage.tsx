@@ -1,12 +1,15 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { useParams, useNavigate } from 'react-router-dom';
 import RegulationsList from '../components/Regulations/RegulationsList';
 import RegulationDetail from '../components/Regulations/RegulationDetail';
-import { regulations } from '../data/mockData';
 
 const RegulationsPage: React.FC = () => {
-  const [selectedRegulationId, setSelectedRegulationId] = useState<string | null>(null);
+  const { id } = useParams<{ id: string }>();
+  const navigate = useNavigate();
   
-  const selectedRegulation = regulations.find(r => r.id === selectedRegulationId);
+  const handleCloseDetail = () => {
+    navigate('/regulations');
+  };
   
   return (
     <div className="space-y-6">
@@ -18,10 +21,10 @@ const RegulationsPage: React.FC = () => {
         </div>
       </div>
       
-      {selectedRegulation ? (
+      {id ? (
         <RegulationDetail 
-          regulation={selectedRegulation} 
-          onClose={() => setSelectedRegulationId(null)} 
+          regulationId={id} 
+          onClose={handleCloseDetail} 
         />
       ) : (
         <RegulationsList />

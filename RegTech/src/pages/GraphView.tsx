@@ -1,7 +1,8 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import GraphVisualization from '../components/Graph/GraphVisualization';
-import { graphData } from '../data/mockData';
 import { Network, Filter, ZoomIn, ZoomOut, RefreshCw } from 'lucide-react';
+import { graphAPI } from '../api';
+import { GraphData } from '../types';
 
 const GraphView: React.FC = () => {
   const [filterOpen, setFilterOpen] = useState(false);
@@ -10,17 +11,52 @@ const GraphView: React.FC = () => {
     agency: true,
     bank: true
   });
+  const [graphData, setGraphData] = useState<GraphData>({ nodes: [], links: [] });
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   
-  const filteredData = {
-    nodes: graphData.nodes.filter(node => nodeTypes[node.type]),
-    links: graphData.links.filter(link => {
-      const sourceNode = graphData.nodes.find(n => n.id === link.source);
-      const targetNode = graphData.nodes.find(n => n.id === link.target);
+  useEffect(() => {
+    fetchGraphData();
+  }, [nodeTypes]);
+  
+  const fetchGraphData = async () => {
+    setIsLoading(true);
+    try {
+      const data = await graphAPI.getGraphData({
+        include_regulations: nodeTypes.regulation,
+        include_agencies: nodeTypes.agency,
+        include_banks: nodeTypes.bank
+      });
+      setGraphData(data);
+      setError(null);
+    } catch (err) {
+      console.error('Error fetching graph data:', err);
+      setError('Failed to load graph data');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+  
+  const handleNodeClick = async (nodeId: string, nodeType: string) => {
+    try {
+      const expandedData = await graphAPI.expandNode(nodeId, nodeType);
       
-      return sourceNode && targetNode && 
-             nodeTypes[sourceNode.type] && 
-             nodeTypes[targetNode.type];
-    })
+      // Merge the expanded data with the existing graph data
+      const existingNodeIds = new Set(graphData.nodes.map(node => node.id));
+      const existingLinkIds = new Set(graphData.links.map(link => `${link.source}-${link.target}`));
+      
+      const newNodes = expandedData.nodes.filter(node => !existingNodeIds.has(node.id));
+      const newLinks = expandedData.links.filter(
+        link => !existingLinkIds.has(`${link.source}-${link.target}`)
+      );
+      
+      setGraphData({
+        nodes: [...graphData.nodes, ...newNodes],
+        links: [...graphData.links, ...newLinks]
+      });
+    } catch (err) {
+      console.error('Error expanding node:', err);
+    }
   };
   
   const handleNodeTypeToggle = (type: 'regulation' | 'agency' | 'bank') => {
@@ -28,6 +64,10 @@ const GraphView: React.FC = () => {
       ...prev,
       [type]: !prev[type]
     }));
+  };
+  
+  const handleReset = () => {
+    fetchGraphData();
   };
   
   return (
@@ -51,7 +91,10 @@ const GraphView: React.FC = () => {
           <button className="btn btn-outline p-2">
             <ZoomOut size={20} />
           </button>
-          <button className="btn btn-outline p-2">
+          <button 
+            className="btn btn-outline p-2"
+            onClick={handleReset}
+          >
             <RefreshCw size={20} />
           </button>
         </div>
@@ -106,17 +149,29 @@ const GraphView: React.FC = () => {
           <div>
             <h2 className="text-xl font-semibold">Regulatory Knowledge Graph</h2>
             <p className="text-sm text-neutral-light">
-              Showing {filteredData.nodes.length} nodes and {filteredData.links.length} connections
+              {isLoading 
+                ? 'Loading graph data...' 
+                : `Showing ${graphData.nodes.length} nodes and ${graphData.links.length} connections`}
             </p>
           </div>
         </div>
         
-        <div className="border border-neutral-lighter rounded-lg overflow-hidden">
-          <GraphVisualization data={filteredData} height={700} />
-        </div>
+        {error ? (
+          <div className="border border-neutral-lighter rounded-lg p-8 text-center text-red-500">
+            {error}
+          </div>
+        ) : (
+          <div className="border border-neutral-lighter rounded-lg overflow-hidden">
+            <GraphVisualization 
+              data={graphData} 
+              height={700} 
+              onNodeClick={handleNodeClick}
+            />
+          </div>
+        )}
         
         <div className="mt-4 text-sm text-neutral-light">
-          <p>Tip: Click and drag nodes to rearrange the graph. Zoom in/out using the buttons above.</p>
+          <p>Tip: Click on a node to expand its connections. Click and drag nodes to rearrange the graph.</p>
         </div>
       </div>
     </div>

@@ -1,5 +1,5 @@
 import React from 'react';
-import { NavLink } from 'react-router-dom';
+import { NavLink, useNavigate } from 'react-router-dom';
 import { 
   Home, 
   Network, 
@@ -7,10 +7,20 @@ import {
   BarChart3, 
   MessageSquare, 
   Settings,
-  Shield
+  Shield,
+  LogOut
 } from 'lucide-react';
+import { useAuth } from '../context/AuthContext';
 
 const Sidebar: React.FC = () => {
+  const { logout } = useAuth();
+  const navigate = useNavigate();
+  
+  const handleLogout = () => {
+    logout();
+    navigate('/login');
+  };
+  
   return (
     <aside className="w-64 bg-white border-r border-neutral-lighter flex flex-col">
       <div className="p-6 border-b border-neutral-lighter">
@@ -117,6 +127,14 @@ const Sidebar: React.FC = () => {
           <Settings size={18} className="mr-3" />
           <span>Settings</span>
         </NavLink>
+        
+        <button
+          className="w-full flex items-center px-4 py-3 rounded-md text-neutral hover:bg-neutral-lighter mt-2"
+          onClick={handleLogout}
+        >
+          <LogOut size={18} className="mr-3" />
+          <span>Sign Out</span>
+        </button>
       </div>
     </aside>
   );

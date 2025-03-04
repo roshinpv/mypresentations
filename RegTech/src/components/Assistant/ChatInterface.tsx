@@ -1,71 +1,92 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Send, FileText } from 'lucide-react';
-import { chatMessages as initialMessages } from '../../data/mockData';
+import { useAuth } from '../../context/AuthContext';
+import { assistantAPI } from '../../api';
 import { ChatMessage } from '../../types';
 
 const ChatInterface: React.FC = () => {
-  const [messages, setMessages] = useState<ChatMessage[]>(initialMessages);
+  const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const { user } = useAuth();
   
-  const handleSendMessage = (e: React.FormEvent) => {
+  // Fetch chat history when component mounts
+  useEffect(() => {
+    const fetchChatHistory = async () => {
+      if (!user) return;
+      
+      try {
+        const history = await assistantAPI.getHistory(user.id);
+        setMessages(history);
+      } catch (error) {
+        console.error('Error fetching chat history:', error);
+      }
+    };
+    
+    fetchChatHistory();
+  }, [user]);
+  
+  const handleSendMessage = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    if (!input.trim()) return;
+    if (!input.trim() || !user) return;
     
     // Add user message
     const userMessage: ChatMessage = {
-      id: `msg-${messages.length + 1}`,
+      id: `temp-${Date.now()}`,
       content: input,
       sender: 'user',
-      timestamp: new Date().toISOString()
+      timestamp: new Date().toISOString(),
+      user_id: user.id
     };
     
-    setMessages([...messages, userMessage]);
+    setMessages(prev => [...prev, userMessage]);
     setInput('');
+    setIsLoading(true);
     
-    // Simulate bot response after a short delay
-    setTimeout(() => {
+    try {
+      // Send query to API
+      const response = await assistantAPI.query(input, user.id);
+      
+      // Add bot response
       const botMessage: ChatMessage = {
-        id: `msg-${messages.length + 2}`,
-        content: generateBotResponse(input),
+        id: `resp-${Date.now()}`,
+        content: response.response,
         sender: 'bot',
         timestamp: new Date().toISOString(),
-        citations: [
-          {
-            regulationId: 'reg-001',
-            text: 'Basel III requires implementation of liquidity coverage ratio (LCR)'
-          }
-        ]
+        user_id: user.id,
+        citations: response.citations
       };
       
       setMessages(prev => [...prev, botMessage]);
-    }, 1000);
+    } catch (error) {
+      console.error('Error querying assistant:', error);
+      
+      // Add error message
+      const errorMessage: ChatMessage = {
+        id: `error-${Date.now()}`,
+        content: "I'm sorry, I encountered an error processing your request. Please try again.",
+        sender: 'bot',
+        timestamp: new Date().toISOString(),
+        user_id: user.id
+      };
+      
+      setMessages(prev => [...prev, errorMessage]);
+    } finally {
+      setIsLoading(false);
+    }
   };
   
-  const generateBotResponse = (userInput: string): string => {
-    // This is a simple mock response generator
-    // In a real application, this would call an LLM API
+  const handleClearChat = async () => {
+    if (!user) return;
     
-    const input = userInput.toLowerCase();
-    
-    if (input.includes('basel') || input.includes('capital')) {
-      return "Basel III establishes minimum capital requirements for banks. The key components include Common Equity Tier 1 (CET1) ratio of 4.5%, Tier 1 capital ratio of 6%, and total capital ratio of 8%. Additionally, banks must maintain a capital conservation buffer of 2.5% and potentially a countercyclical buffer of up to 2.5%.";
+    try {
+      await assistantAPI.clearHistory(user.id);
+      setMessages([]);
+    } catch (error) {
+      console.error('Error clearing chat history:', error);
     }
-    
-    if (input.includes('liquidity') || input.includes('lcr')) {
-      return "The Liquidity Coverage Ratio (LCR) requires banks to maintain sufficient high-quality liquid assets to cover their total net cash outflows over a 30-day stress period. The Net Stable Funding Ratio (NSFR) requires banks to maintain a stable funding profile in relation to their on and off-balance sheet activities.";
-    }
-    
-    if (input.includes('volcker')) {
-      return "The Volcker Rule prohibits banks from engaging in proprietary trading and limits their investments in hedge funds and private equity funds. Banks must establish compliance programs to ensure they are not engaging in prohibited activities.";
-    }
-    
-    if (input.includes('aml') || input.includes('money laundering')) {
-      return "Anti-Money Laundering (AML) regulations require financial institutions to implement Know Your Customer (KYC) procedures, monitor transactions for suspicious activity, and report suspicious transactions to the appropriate authorities.";
-    }
-    
-    return "I'm your AI Compliance Assistant. I can help answer questions about banking regulations, compliance requirements, and regulatory impacts. Please ask a specific question about a regulation or compliance topic.";
   };
   
   // Scroll to bottom when messages change
@@ -77,49 +98,61 @@ const ChatInterface: React.FC = () => {
     <div className="card h-full flex flex-col">
       <div className="flex items-center justify-between mb-4">
         <h2 className="text-lg font-semibold">AI Compliance Assistant</h2>
-        <button className="btn btn-outline text-sm">Clear Chat</button>
+        <button 
+          className="btn btn-outline text-sm"
+          onClick={handleClearChat}
+        >
+          Clear Chat
+        </button>
       </div>
       
       <div className="flex-1 overflow-y-auto mb-4 pr-2">
-        <div className="space-y-4">
-          {messages.map((message) => (
-            <div 
-              key={message.id} 
-              className={`chat-message ${
-                message.sender === 'user' ? 'chat-message-user' : 'chat-message-bot'
-              }`}
-            >
-              <div className="text-sm">
-                {message.content}
-              </div>
-              
-              {message.citations && message.citations.length > 0 && (
-                <div className="mt-2 pt-2 border-t border-neutral-lighter/50">
-                  <div className="flex items-center text-xs text-neutral-light">
-                    <FileText size={12} className="mr-1" />
-                    <span>Citations:</span>
-                  </div>
-                  <ul className="mt-1 space-y-1">
-                    {message.citations.map((citation, index) => (
-                      <li key={index} className="text-xs text-primary">
-                        <button className="underline">
-                          {citation.text}
-                        </button>
-                      </li>
-                    ))}
-                  </ul>
+        {messages.length === 0 ? (
+          <div className="h-full flex flex-col items-center justify-center text-neutral-light">
+            <p className="mb-2">No messages yet.</p>
+            <p>Ask me anything about banking regulations and compliance!</p>
+          </div>
+        ) : (
+          <div className="space-y-4">
+            {messages.map((message) => (
+              <div 
+                key={message.id} 
+                className={`chat-message ${
+                  message.sender === 'user' ? 'chat-message-user' : 'chat-message-bot'
+                }`}
+              >
+                <div className="text-sm">
+                  {message.content}
                 </div>
-              )}
-              
-              <div className="text-right mt-1">
-                <span className="text-xs text-neutral-light">
-                  {new Date(message.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                </span>
+                
+                {message.citations && message.citations.length > 0 && (
+                  <div className="mt-2 pt-2 border-t border-neutral-lighter/50">
+                    <div className="flex items-center text-xs text-neutral-light">
+                      <FileText size={12} className="mr-1" />
+                      <span>Citations:</span>
+                    </div>
+                    <ul className="mt-1 space-y-1">
+                      {message.citations.map((citation, index) => (
+                        <li key={index} className="text-xs text-primary">
+                          <button className="underline">
+                            {citation.text}
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+                
+                <div className="text-right mt-1">
+                  <span className="text-xs text-neutral-light">
+                    {new Date(message.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                  </span>
+                </div>
               </div>
-            </div>
-          ))}
-          <div ref={messagesEndRef} />
-        </div>
+            ))}
+            <div ref={messagesEndRef} />
+          </div>
+        )}
       </div>
       
       <form onSubmit={handleSendMessage} className="mt-auto">
@@ -130,18 +163,26 @@ const ChatInterface: React.FC = () => {
             className="flex-1 px-4 py-3 focus:outline-none"
             value={input}
             onChange={(e) => setInput(e.target.value)}
+            disabled={isLoading}
           />
           <button 
             type="submit" 
-            className="bg-primary text-white p-3 hover:bg-primary-dark"
-            disabled={!input.trim()}
+            className="bg-primary text-white p-3 hover:bg-primary-dark disabled:bg-neutral-lighter disabled:cursor-not-allowed"
+            disabled={!input.trim() || isLoading}
           >
             <Send size={18} />
           </button>
         </div>
-        <p className="text-xs text-neutral-light mt-2">
-          Powered by Llama 3.2 6B fine-tuned on regulatory data
-        </p>
+        {isLoading && (
+          <p className="text-xs text-neutral-light mt-2">
+            Thinking...
+          </p>
+        )}
+        {!isLoading && (
+          <p className="text-xs text-neutral-light mt-2">
+            Powered by Llama 3.2 6B fine-tuned on regulatory data
+          </p>
+        )}
       </form>
     </div>
   );

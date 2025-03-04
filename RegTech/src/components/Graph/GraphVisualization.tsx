@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import * as d3 from 'd3';
 import { GraphData } from '../../types';
 
@@ -6,17 +6,22 @@ interface GraphVisualizationProps {
   data: GraphData;
   width?: number;
   height?: number;
+  onNodeClick?: (nodeId: string, nodeType: string) => void;
 }
 
 const GraphVisualization: React.FC<GraphVisualizationProps> = ({ 
   data, 
   width = 800, 
-  height = 600 
+  height = 600,
+  onNodeClick
 }) => {
   const svgRef = useRef<SVGSVGElement>(null);
+  const [isLoading, setIsLoading] = useState(false);
   
   useEffect(() => {
     if (!svgRef.current || !data.nodes.length) return;
+    
+    setIsLoading(true);
     
     // Clear previous visualization
     d3.select(svgRef.current).selectAll("*").remove();
@@ -72,6 +77,11 @@ const GraphVisualization: React.FC<GraphVisualizationProps> = ({
       .append("circle")
       .attr("class", (d) => `node node-${d.type}`)
       .attr("r", 15)
+      .on("click", (event, d: any) => {
+        if (onNodeClick) {
+          onNodeClick(d.id, d.type);
+        }
+      })
       .call(d3.drag<SVGCircleElement, any>()
         .on("start", dragstarted)
         .on("drag", dragged)
@@ -151,10 +161,12 @@ const GraphVisualization: React.FC<GraphVisualizationProps> = ({
         .text(item.label);
     });
     
+    setIsLoading(false);
+    
     return () => {
       simulation.stop();
     };
-  }, [data, width, height]);
+  }, [data, width, height, onNodeClick]);
   
   return (
     <div className="card overflow-hidden">
@@ -167,7 +179,13 @@ const GraphVisualization: React.FC<GraphVisualizationProps> = ({
         </div>
       </div>
       <div className="border border-neutral-lighter rounded-lg overflow-hidden">
-        <svg ref={svgRef} className="w-full" style={{ minHeight: '500px' }}></svg>
+        {isLoading ? (
+          <div className="flex items-center justify-center" style={{ height: '500px' }}>
+            <p className="text-neutral-light">Loading graph...</p>
+          </div>
+        ) : (
+          <svg ref={svgRef} className="w-full" style={{ minHeight: '500px' }}></svg>
+        )}
       </div>
     </div>
   );
